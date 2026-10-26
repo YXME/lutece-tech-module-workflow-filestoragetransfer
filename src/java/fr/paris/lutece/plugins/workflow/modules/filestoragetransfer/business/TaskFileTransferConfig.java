@@ -34,7 +34,11 @@
 package fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.business;
 
 import fr.paris.lutece.plugins.workflowcore.business.config.TaskConfig;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Named;
 
+@Dependent
+@Named( "workflow-filestoragetransfer.taskFileTransferConfig" )
 public class TaskFileTransferConfig extends TaskConfig
 {
 

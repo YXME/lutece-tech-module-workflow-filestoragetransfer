@@ -37,11 +37,16 @@ package fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.business;
 
 import fr.paris.lutece.plugins.workflowcore.business.config.ITaskConfigDAO;
 import fr.paris.lutece.util.sql.DAOUtil;
+import fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.service.TaskFileTransferConfigProducer;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Named;
 import java.sql.Statement;
 
 /**
  * This class provides Data Access methods for TaskFileTransferConfig objects
  */
+@ApplicationScoped
+@Named( TaskFileTransferConfigProducer.BEAN_CONFIG_DAO )
 public class TaskFileTransferConfigDAO implements ITaskConfigDAO<TaskFileTransferConfig>
 {
     

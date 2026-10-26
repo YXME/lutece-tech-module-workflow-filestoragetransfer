@@ -1,42 +1,45 @@
 package fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.web;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.servlet.http.HttpServletRequest;
 
-import fr.paris.lutece.plugins.genericattributes.business.Entry;
-import fr.paris.lutece.plugins.genericattributes.business.EntryFilter;
-import fr.paris.lutece.plugins.genericattributes.business.EntryHome;
-import fr.paris.lutece.plugins.genericattributes.business.EntryType;
-import fr.paris.lutece.plugins.genericattributes.business.EntryTypeHome;
-import fr.paris.lutece.plugins.genericattributes.service.GenericAttributesPlugin;
 import fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.business.TaskFileTransferConfig;
+import fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.service.TaskFileTransferConfigProducer;
+import fr.paris.lutece.plugins.workflowcore.business.task.ITaskType;
 import fr.paris.lutece.plugins.workflow.web.task.AbstractTaskComponent;
-import fr.paris.lutece.plugins.workflowcore.business.config.ITaskConfig;
 import fr.paris.lutece.plugins.workflowcore.service.config.ITaskConfigService;
 import fr.paris.lutece.plugins.workflowcore.service.task.ITask;
 import fr.paris.lutece.portal.service.file.IFileStoreServiceProvider;
-import fr.paris.lutece.portal.service.rbac.ResourceType;
-import fr.paris.lutece.portal.service.rbac.ResourceTypeManager;
-import fr.paris.lutece.portal.service.rbac.ResourceTypeProvider;
-import fr.paris.lutece.portal.service.spring.SpringContextService;
+import fr.paris.lutece.plugins.filestoragetransfer.service.FileStoreProviderLabelService;
+import fr.paris.lutece.portal.service.message.AdminMessage;
+import fr.paris.lutece.portal.service.message.AdminMessageService;
 import fr.paris.lutece.portal.service.template.AppTemplateService;
-import fr.paris.lutece.portal.service.util.AppPropertiesService;
+import org.apache.commons.lang3.StringUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import fr.paris.lutece.portal.web.constants.Messages;
 import fr.paris.lutece.util.html.HtmlTemplate;
 
+/**
+ * Back office component of the file transfer task
+ */
+@ApplicationScoped
+@Named( "workflow-filestoragetransfer.taskFileTransferTaskComponent" )
 public class TaskFileTransferTaskComponent extends AbstractTaskComponent {
 
 
     private static final String MARK_CONFIG = "config";
     private static final String MARK_FILESERVICES_LIST = "file_services_list";
+    private static final String MARK_TARGET_LABEL = "target_label";
 
     /*
     private static final String MARK_LIST_ENTRIES = "list_entries";
@@ -58,22 +61,66 @@ public class TaskFileTransferTaskComponent extends AbstractTaskComponent {
     */
     
     private static final String FILTER_RESOURCE_TYPE = "FORMS_FORM";
+
+    // Parameters of the configuration form
+    private static final String PARAMETER_ENTRY_CODE = "entryCode";
+    private static final String PARAMETER_TARGET_FILESERVICEPROVIDER_NAME = "targetFileserviceproviderName";
+
+    // Size of workflow_task_file_transfer_config.entry_code
+    private static final int ENTRY_CODE_MAX_LENGTH = 50;
+
+    // Messages
+    private static final String MESSAGE_ENTRY_CODE_TOO_LONG = "module.workflow.filestoragetransfer.message.error.entryCodeTooLong";
+    private static final String MESSAGE_UNKNOWN_FILE_STORE_PROVIDER = "module.workflow.filestoragetransfer.message.error.unknownFileStoreProvider";
     //private static final int FILTER_ENTRY_TYPE = 8;
 
-    @Inject
-    @Named( "workflow-filestoragetransfer.taskFileTransferService" )
     private ITaskConfigService _taskConfigService;
+
+    @Inject
+    @ConfigProperty( name = "workflow-filestoragetransfer.filetransfercontext" )
+    private String _strFileTransferContext;
+
+    @Inject
+    @Any
+    private Instance<IFileStoreServiceProvider> _fileStoreServiceProviders;
+
+    @Inject
+    private FileStoreProviderLabelService _providerLabelService;
 
     private static final String TEMPLATE_TASK_FILE_STORAGE_TRANSFER_CONFIG = "admin/plugins/workflow/modules/filestoragetransfer/task_file_storage_transfer_config_form.ftl";
     private static final String TEMPLATE_TASK_FILE_STORAGE_TRANSFER = "admin/plugins/workflow/modules/filestoragetransfer/task_file_storage_transfer_form.ftl";
 
-    TaskFileTransferConfig _config;
+    /**
+     * Constructor for the CDI proxy
+     */
+    public TaskFileTransferTaskComponent( )
+    {
+    }
+
+    /**
+     * Constructor
+     *
+     * @param taskType
+     *            the type of the task
+     * @param taskConfigService
+     *            the configuration service of the task
+     */
+    @Inject
+    public TaskFileTransferTaskComponent( @Named( "workflow-filestoragetransfer.taskTypeFileTransfer" ) ITaskType taskType,
+            @Named( TaskFileTransferConfigProducer.BEAN_CONFIG_SERVICE ) ITaskConfigService taskConfigService )
+    {
+        _taskConfigService = taskConfigService;
+        setTaskType( taskType );
+        setTaskConfigService( taskConfigService );
+    }
 
     @Override
     public String getDisplayTaskForm(int nIdResource, String strResourceType, HttpServletRequest request, Locale locale, ITask task) 
     {
         Map<String, Object> model = new HashMap<>( );
-        model.put( MARK_CONFIG, _taskConfigService.findByPrimaryKey( task.getId( ) ) );
+        TaskFileTransferConfig config = _taskConfigService.findByPrimaryKey( task.getId( ) );
+        model.put( MARK_CONFIG, config );
+        model.put( MARK_TARGET_LABEL, _providerLabelService.getLabel( config != null ? config.getTargetFileserviceproviderName( ) : null, locale ) );
 
         HtmlTemplate template = AppTemplateService.getTemplate( TEMPLATE_TASK_FILE_STORAGE_TRANSFER, locale, model );
 
@@ -91,11 +138,8 @@ public class TaskFileTransferTaskComponent extends AbstractTaskComponent {
             ? new TaskFileTransferConfig( ) 
             : _taskConfigService.findByPrimaryKey( task.getId( ) );
 
-            List<String> listFileServices = SpringContextService.getBeansOfType( IFileStoreServiceProvider.class )
-            .stream( ).map( IFileStoreServiceProvider::getName ).collect( Collectors.toList( ) );
-            
             Map<String, Object> model = new HashMap<>( );
-            model.put ( MARK_FILESERVICES_LIST, listFileServices );
+            model.put ( MARK_FILESERVICES_LIST, _providerLabelService.getProviders( locale ) );
             model.put( MARK_CONFIG, config );
 
             final HtmlTemplate template = AppTemplateService.getTemplate( TEMPLATE_TASK_FILE_STORAGE_TRANSFER_CONFIG, locale, model );
@@ -103,31 +147,62 @@ public class TaskFileTransferTaskComponent extends AbstractTaskComponent {
     }
 
     @Override
-    public String doSaveConfig( HttpServletRequest request, Locale locale, ITask task ) 
+    public String doSaveConfig( HttpServletRequest request, Locale locale, ITask task )
     {
-        _config = _taskConfigService.findByPrimaryKey( task.getId( ) );
-       
-        boolean create = _config == null;
+        String strEntryCode = StringUtils.trim( request.getParameter( PARAMETER_ENTRY_CODE ) );
+        String strTargetFileserviceproviderName = request.getParameter( PARAMETER_TARGET_FILESERVICEPROVIDER_NAME );
+
+        // The configuration is saved only when it can work: a code and a provider of this site, within the columns
+        if ( StringUtils.isBlank( strEntryCode ) || StringUtils.isBlank( strTargetFileserviceproviderName ) )
+        {
+            return AdminMessageService.getMessageUrl( request, Messages.MANDATORY_FIELDS, AdminMessage.TYPE_STOP );
+        }
+        if ( strEntryCode.length( ) > ENTRY_CODE_MAX_LENGTH )
+        {
+            return AdminMessageService.getMessageUrl( request, MESSAGE_ENTRY_CODE_TOO_LONG, new Object [ ] {
+                    ENTRY_CODE_MAX_LENGTH
+            }, AdminMessage.TYPE_STOP );
+        }
+        if ( !getFileStoreServiceProviderNames( ).contains( strTargetFileserviceproviderName ) )
+        {
+            return AdminMessageService.getMessageUrl( request, MESSAGE_UNKNOWN_FILE_STORE_PROVIDER, new Object [ ] {
+                    strTargetFileserviceproviderName
+            }, AdminMessage.TYPE_STOP );
+        }
+
+        TaskFileTransferConfig config = _taskConfigService.findByPrimaryKey( task.getId( ) );
+
+        boolean create = config == null;
         if ( create )
         {
-            _config = new TaskFileTransferConfig( );
-            _config.setIdTask( task.getId( ) );
-            _config.setTargetFileserviceproviderName( request.getParameter( "targetFileserviceproviderName" ) );
-            _config.setContext( AppPropertiesService.getProperty( "workflow-filestoragetransfer.filetransfercontext" ) );
-            _config.setEntryCode( request.getParameter( "entryCode" ) );
-            _config.setResourceCode( "" );
-            _config.setResourceType( FILTER_RESOURCE_TYPE );
+            config = new TaskFileTransferConfig( );
+            config.setIdTask( task.getId( ) );
+            config.setTargetFileserviceproviderName( strTargetFileserviceproviderName );
+            config.setContext( _strFileTransferContext );
+            config.setEntryCode( strEntryCode );
+            config.setResourceCode( "" );
+            config.setResourceType( FILTER_RESOURCE_TYPE );
 
-            _taskConfigService.create( _config );
+            _taskConfigService.create( config );
         }
         else
         {
-            _config.setEntryCode( request.getParameter( "entryCode" ) );
-            _config.setTargetFileserviceproviderName( request.getParameter( "targetFileserviceproviderName" ) );
-            _taskConfigService.update( _config );
+            config.setEntryCode( strEntryCode );
+            config.setTargetFileserviceproviderName( strTargetFileserviceproviderName );
+            _taskConfigService.update( config );
         }
         return null;
 
+    }
+
+    /**
+     * Returns the names of the file store service providers of the site
+     *
+     * @return the names of the providers
+     */
+    private List<String> getFileStoreServiceProviderNames( )
+    {
+        return _fileStoreServiceProviders.stream( ).map( IFileStoreServiceProvider::getName ).collect( Collectors.toList( ) );
     }
 
     @Override
@@ -138,7 +213,8 @@ public class TaskFileTransferTaskComponent extends AbstractTaskComponent {
 
         Map<String, Object> model = new HashMap<>( );
         model.put( MARK_CONFIG, config );
-        
+        model.put( MARK_TARGET_LABEL, _providerLabelService.getLabel( config.getTargetFileserviceproviderName( ), locale ) );
+
         return AppTemplateService.getTemplate( TEMPLATE_TASK_FILE_STORAGE_TRANSFER, locale, model ).getHtml( );
     }
 

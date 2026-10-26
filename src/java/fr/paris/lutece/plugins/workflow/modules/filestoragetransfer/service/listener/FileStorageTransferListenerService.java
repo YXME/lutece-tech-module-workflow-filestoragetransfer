@@ -1,18 +1,28 @@
 package fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.service.listener;
 
 import java.util.List;
+import java.util.Objects;
 
-import fr.paris.lutece.portal.service.util.AppPropertiesService;
 import fr.paris.lutece.plugins.filestoragetransfer.business.FileStorageTransferRequest;
 import fr.paris.lutece.plugins.filestoragetransfer.service.listener.IFileStorageTransferListener;
 
 import fr.paris.lutece.plugins.genericattributes.business.Response;
 import fr.paris.lutece.plugins.genericattributes.business.ResponseFilter;
 import fr.paris.lutece.plugins.genericattributes.business.ResponseHome;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+/**
+ * Updates the key of the generic attributes response whose file was transferred
+ */
+@ApplicationScoped
 public class FileStorageTransferListenerService implements IFileStorageTransferListener
 {
-    private static String contextValue = AppPropertiesService.getProperty( "workflow-filestoragetransfer.filetransfercontext" );
+    @Inject
+    @ConfigProperty( name = "workflow-filestoragetransfer.filetransfercontext" )
+    private String _strContextValue;
 
     @Override
     public void changeFileService( FileStorageTransferRequest fileTransferRequest )
@@ -44,7 +54,7 @@ public class FileStorageTransferListenerService implements IFileStorageTransferL
 
     @Override
     public boolean verifyFileStorageTransferContext( String fileTransferRequestContext ) {
-        return fileTransferRequestContext.equals( contextValue ) ? true : false;
+        return Objects.equals( _strContextValue, fileTransferRequestContext );
     }
 
     @Override

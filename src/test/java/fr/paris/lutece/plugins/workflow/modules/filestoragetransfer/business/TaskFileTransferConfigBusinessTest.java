@@ -34,28 +34,63 @@
 
 package fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.business;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.junit.jupiter.api.Test;
+
+import fr.paris.lutece.plugins.workflow.modules.filestoragetransfer.service.TaskFileTransferConfigProducer;
+import fr.paris.lutece.plugins.workflowcore.service.config.ITaskConfigService;
 import fr.paris.lutece.test.LuteceTestCase;
-
-import java.util.Optional;
-
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
 
 /**
  * This is the business class test for the object TaskFileTransferConfig
  */
 public class TaskFileTransferConfigBusinessTest extends LuteceTestCase
 {
-    private static final String PROVIDEREMAIL1 = "ProviderEmail1";
-    private static final String PROVIDEREMAIL2 = "ProviderEmail2";
+    private static final int ID_TASK = 9999;
+    private static final String ENTRYCODE1 = "EntryCode1";
+    private static final String ENTRYCODE2 = "EntryCode2";
     private static final String TARGETFILESERVICEPROVIDERNAME1 = "TargetFileserviceproviderName1";
     private static final String TARGETFILESERVICEPROVIDERNAME2 = "TargetFileserviceproviderName2";
     private static final String CONTEXT1 = "Context1";
-    private static final String CONTEXT2 = "Context2";
 
-	/**
-	* test TaskFileTransferConfig
-	*/
-    public void testBusiness(  )
+    @Inject
+    @Named( TaskFileTransferConfigProducer.BEAN_CONFIG_SERVICE )
+    private ITaskConfigService _taskConfigService;
+
+    /**
+     * test TaskFileTransferConfig
+     */
+    @Test
+    public void testBusiness( )
     {
-        
+        TaskFileTransferConfig config = new TaskFileTransferConfig( );
+        config.setIdTask( ID_TASK );
+        config.setResourceType( "FORMS_FORM" );
+        config.setResourceCode( "" );
+        config.setEntryCode( ENTRYCODE1 );
+        config.setTargetFileserviceproviderName( TARGETFILESERVICEPROVIDERNAME1 );
+        config.setContext( CONTEXT1 );
+
+        _taskConfigService.create( config );
+        TaskFileTransferConfig stored = _taskConfigService.findByPrimaryKey( ID_TASK );
+        assertNotNull( stored, "config created" );
+        assertEquals( ENTRYCODE1, stored.getEntryCode( ), "entry code" );
+        assertEquals( TARGETFILESERVICEPROVIDERNAME1, stored.getTargetFileserviceproviderName( ), "target" );
+        assertEquals( CONTEXT1, stored.getContext( ), "context" );
+
+        config.setEntryCode( ENTRYCODE2 );
+        config.setTargetFileserviceproviderName( TARGETFILESERVICEPROVIDERNAME2 );
+        _taskConfigService.update( config );
+        stored = _taskConfigService.findByPrimaryKey( ID_TASK );
+        assertEquals( ENTRYCODE2, stored.getEntryCode( ), "entry code updated" );
+        assertEquals( TARGETFILESERVICEPROVIDERNAME2, stored.getTargetFileserviceproviderName( ), "target updated" );
+
+        _taskConfigService.remove( ID_TASK );
+        assertNull( _taskConfigService.findByPrimaryKey( ID_TASK ), "config removed" );
     }
 }
